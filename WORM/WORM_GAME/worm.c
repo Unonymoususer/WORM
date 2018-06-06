@@ -61,7 +61,7 @@ void speed_up_item(void);
 void status(void);      //개발자용 status 표시
 void status_off(void);   //개발자용 status 끄기
 void option(void);      //option   
-
+void option_text(void);
 
 						//메인함수
 int main() {
@@ -878,4 +878,8 @@ void status_off(void) {
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 9, "                   ");
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 10, "                   ");
 	movexy(MAP_ADJ_X + 1, MAP_ADJ_Y + MAP_Y + 2);
+}
+
+void option_text(void) {
+
 }
