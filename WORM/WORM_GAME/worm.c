@@ -18,31 +18,50 @@
 
 static int MAP_X = 30;      //맵의 X축 크기
 static int MAP_Y = 20;		//맵의 Y축 크기
+static int reverse_value = 0;
+static clock_t reverse_item_effect_start = 0;
+static clock_t reverse_item_effect_end = 0;
+static clock_t food_item_time_start = 0;
+static clock_t reverse_item_time_start = 0;
+static clock_t length_item_time_start = 0;
+static clock_t speed_item_time_start = 0;
+static clock_t trap_item_time_start = 0;
+static clock_t food_item_time_end = 0;
+static clock_t reverse_item_time_end = 0;
+static clock_t length_item_time_end = 0;
+static clock_t speed_item_time_end = 0;
+static clock_t trap_item_time_end = 0;
+
 int speed = 100;
 int accleration = 3;
-int accleration;
 int x[100], y[100];	//x,y 좌표값을 저장 총 100개 
+
 int food_x, food_y;	//food의 좌표값을 저장 
 int reverse_item_x, reverse_item_y;
 int speed_up_item_x, speed_up_item_y;
+int length_item_x, length_item_y;
+int trap_x, trap_y;
+
+int food_item_regeneration = 12;		//음식재생성 12초
+int reverse_item_regeneration = 14;		//리버스재생생 14초
+int length_item_regeneration = 16;		//길이재생생 16초
+int speed_item_regeneration = 18;		//스피드재생성 18초
+int trap_item_regeneration = 20;		//함정재생성 20초
+int reverse_item_effect_duration = 5;
+
+int food_count = 0;
+int length_item_count = 0;
+int speed_up_item_count = 0;
+int reverse_item_count = 0;
+int trap_count = 0;
+
 int length;         //몸길이를 기억
 int score;			//점수 저장, reset함수에 의해 초기화됨
 int best_score = 0; //최고 점수 저장, reset함수에 의해 초기화 되지 않음 
 int last_score = 0; //마지막 점수 저장, reset함수에 의해 초기화 되지 않음
 int direction;      //이동방향 저장 
 int key;			//입력받은 키 저장 
-int trap_x, trap_y;
-int length_item_x, length_item_y;
 int status_on = 0;	//개발자용 status 표시활성화 변수. 게임중에 S키를 누르면 활성화
-int food_count = -1;
-int length_item_count = -1;
-int speed_up_item_count = -1;
-int reverse_item_count = -1;
-int reverse_value = 0;
-int interval = 5000;
-
-char *reverse_item_waring[] = { "YOU JUST ACTIVATED TRAP ITEM. \
-YOUR KEYBOARD INPUT IS REVERSED FOR 5 SECONDS." };
 
 
 void gotoxy(int x, int y, char *s);	//커서이동 및 입력
@@ -50,7 +69,7 @@ void movexy(int x, int y);			//커서이동
 void title(void);      //게임 시작화면 
 void reset(void);      //게임을 초기화 
 void draw_map(void);   //게임판 테두리를 그림 
-void move(int dir);      //뱀머리를 이동 
+void move(int direction);      //뱀머리를 이동 
 void pause(void);      //일시정지 
 void game_over(void);   //게임 오버를 확인 
 void food(void);      //음식 생성 
@@ -60,16 +79,35 @@ void length_item(void);
 void speed_up_item(void);
 void status(void);      //개발자용 status 표시
 void status_off(void);   //개발자용 status 끄기
-void option(void);      //option   
-void option_text(void);
+void option(void);      //option
+void help(void);
 
 						//메인함수
 int main() {
 	system("TITLE WORM GAME");
 	title(); //게임 시작화면 출력
 
+	trap_item();		//두더지
+	food();				//음표	♪
+	speed_up_item();	//S		S
+	length_item();		//클로버	♣
+	reverse_item();		//당구장	※
+	food_item_time_start = clock();
+	reverse_item_time_start = clock();
+	length_item_time_start = clock();
+	speed_item_time_start = clock();
+	trap_item_time_start = clock();
+
 	while (1) {
-		if (_kbhit()) do { key = _getch(); } while (key == 224); //키 입력받음
+		gotoxy(MAP_ADJ_X, MAP_ADJ_Y + MAP_Y, " YOUR SCORE: ");   //점수표시 
+		printf("%5d     LAST SCORE: %5d     BEST SCORE: %5d",
+			score, last_score, best_score);
+
+		if (_kbhit()) {
+			do { 
+				key = _getch();
+			} while (key == 224); //키 입력받음
+		}
 		Sleep(speed);
 
 		//입력받은 키를 파악하고 실행
@@ -78,10 +116,28 @@ int main() {
 		case RIGHT:
 		case UP:
 		case DOWN:
-			if ((direction == LEFT && key != RIGHT) || (direction == RIGHT && key != LEFT) ||
-				(direction == UP && key != DOWN) || (direction == DOWN && key != UP))
-				//180회전이동을 방지하기 위해 필요. 
-				direction = key;
+			if ((direction == LEFT && key != RIGHT) ||
+				(direction == RIGHT && key != LEFT) ||
+				(direction == UP && key != DOWN) ||
+				(direction == DOWN && key != UP)) {
+				direction = key;	//180회전이동을 방지하기 위해 필요.
+				if (reverse_value == 1) {
+					switch (key) {
+					case LEFT:
+						direction = RIGHT;
+						break;
+					case RIGHT:
+						direction = LEFT;
+						break;
+					case UP:
+						direction = DOWN;
+						break;
+					case DOWN:
+						direction = UP;
+						break;
+					}
+				}
+			}
 			key = 0;   //키값을 저장하는 함수를 reset 
 			break;
 		case PAUSE:      //P키를 누르면 일시정지 
@@ -99,8 +155,47 @@ int main() {
 		}
 		move(direction);
 
-		if (status_on == 1) status();      //status 표시
-		if (status_on == 0) status_off();   //status 끄기
+		if (status_on == 1) {
+			status();      //status 표시
+		}
+		else if (status_on == 0) {
+			status_off();   //status 끄기
+		}
+
+		food_item_time_end = clock();
+		reverse_item_time_end = clock();
+		length_item_time_end = clock();
+		speed_item_time_end = clock();
+		trap_item_time_end = clock();
+		reverse_item_effect_end = clock();
+
+
+		if ((food_item_time_end - food_item_time_start)/CLOCKS_PER_SEC > 
+			food_item_regeneration) {
+			food();
+			food_item_time_start = clock();
+		}
+		if ((reverse_item_time_end - reverse_item_time_start) / CLOCKS_PER_SEC >
+			reverse_item_regeneration) {
+			reverse_item();
+			reverse_item_time_start = clock();
+		}
+		if ((length_item_time_end - length_item_time_start) / CLOCKS_PER_SEC >
+			length_item_regeneration) {
+			length_item();
+			length_item_time_start = clock();
+		}
+		if ((speed_item_time_end - speed_item_time_start) / CLOCKS_PER_SEC >
+			speed_item_regeneration) {
+			speed_up_item();
+			speed_item_time_start = clock();
+		}
+		if ((reverse_item_effect_end - reverse_item_effect_start) / CLOCKS_PER_SEC >
+			reverse_item_effect_duration) {
+			reverse_value = 0;
+			gotoxy(MAP_ADJ_X, MAP_ADJ_Y + MAP_Y + 2,
+				"                                                                     ");
+		}
 	}
 }
 
@@ -113,7 +208,7 @@ void gotoxy(int x, int y, char *s) {
 }
 
 
-//커서이동함수. gotoxy에서 prinff기능 삭제
+//커서이동함수. gotoxy에서 printf기능 삭제
 void movexy(int x, int y) {
 	COORD pos = { 2 * x,y };
 	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
@@ -179,11 +274,10 @@ void reset(void) {
 	while (_kbhit()) _getch();   //버퍼에 있는 키값을 버림
 
 	direction = LEFT;      //방향 초기화, 초기방향 왼쪽
-	speed += (-2) * accleration;   //속도 초기화
 	length = 5;            //뱀 길이 초기화
 	score = 0;            //점수 초기화
 
-						  //뱀 몸통값 입력 
+	//뱀 몸통값 입력 
 	for (i = 0; i<length; i++) {
 		x[i] = MAP_X / 2 + i;
 		y[i] = MAP_Y / 2;
@@ -191,11 +285,7 @@ void reset(void) {
 	}
 	gotoxy(MAP_ADJ_X + x[0], MAP_ADJ_Y + y[0], "★");   //뱀 머리 그림
 
-	trap_item();		//두더지
-	food();				//음표	♪
-	speed_up_item();	//S		S
-	length_item();		//클로버	♣
-	reverse_item();		//당구장	※
+	trap_item();			//두더지
 }
 
 
@@ -220,48 +310,47 @@ void move(int direction) {
 	//food와 충돌했을 경우
 	if (x[0] == food_x && y[0] == food_y) {
 		score += 10;   //점수 증가 
-		length++;      //길이증가 
+		length++;      //길이증가
+		food_count++;
+		speed -= accleration;
 
 		x[length - 1] = x[length - 2];   //새로만든 몸통에 값 입력
 		y[length - 1] = y[length - 2];
-
-		food();
 	}
 
 	//speed_up_item과 충돌했을 경우
 	else if (x[0] == speed_up_item_x && y[0] == speed_up_item_y) {
-		speed_up_item();
+		speed_up_item_count++;
+		speed += accleration * 3;
 	}
 
 	//reverse_item과 충돌했을 경우
 	else if (x[0] == reverse_item_x && y[0] == reverse_item_y) {
+		reverse_item_count++;
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 12);
 		gotoxy(MAP_ADJ_X, MAP_ADJ_Y + MAP_Y + 2,
-			"함정 아이템에 걸렸습니다. 5초동안 키보드의 방향이 반전됩니다.");
-
-		//movexy(MAP_ADJ_X, MAP_ADJ_Y + MAP_Y + 2);
-		//printf("%s",reverse_item_waring);
+			"함정 아이템에 걸렸습니다. 일정 시간동안 키보드의 방향이 반전됩니다.");
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
 		reverse_value = 1;
-		reverse_item();
+		reverse_item_effect_start = clock();
 	}
 
 	//length_item과 충돌했을 경우
 	else if (x[0] == length_item_x && y[0] == length_item_y) {
+		length_item_count++;
 		if (length > 3) {
 			length--;
+			gotoxy(MAP_ADJ_X + x[length], MAP_ADJ_Y + y[length], "  ");
 			gotoxy(MAP_ADJ_X + x[length - 1], MAP_ADJ_Y + y[length - 1], "  ");
-			gotoxy(MAP_ADJ_X + x[length - 2], MAP_ADJ_Y + y[length - 2], "  ");
 		}
 		else {
-			gotoxy(MAP_ADJ_X + x[length - 1], MAP_ADJ_Y + y[length - 1], "  ");
+			gotoxy(MAP_ADJ_X + x[length], MAP_ADJ_Y + y[length], "  ");
 		}
-		length_item();
 	}
 
 	//trap과 충돌했을 경우
-	else if (x[0] >= trap_x && x[0] <= trap_x + 3 && y[0] >= trap_y
-		&& y[0] <= trap_y + 2) {
+	else if (x[0] >= trap_x && x[0] <= trap_x + 3 && 
+		y[0] >= trap_y && y[0] <= trap_y + 2) {
 		game_over();
 		return;
 	}
@@ -306,7 +395,7 @@ void move(int direction) {
 		if (direction == UP) --y[0];
 		if (direction == DOWN) ++y[0];
 		gotoxy(MAP_ADJ_X + x[i], MAP_ADJ_Y + y[i], "★"); //새로운 머리좌표값에 머리를 그림 
-														 //SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
+		//SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
 	}
 }
 
@@ -359,9 +448,9 @@ void game_over(void) {
 	}
 	Sleep(500);
 	speed = speed + (food_count * accleration);
-	food_count = -1;
 	speed = speed + (speed_up_item_count * accleration * (-3));
-	speed_up_item_count = -1;
+	food_count = 0;
+	speed_up_item_count = 0;
 
 	while (_kbhit()) _getch();
 	key = _getch();
@@ -374,9 +463,6 @@ void food(void) {
 	int i;
 	int food_crush_on = 0;   //food가 뱀 몸통좌표에 생길 경우 on 
 	int r = 0;            //난수 생성에 사동되는 변수 
-	gotoxy(MAP_ADJ_X, MAP_ADJ_Y + MAP_Y, " YOUR SCORE: ");   //점수표시 
-	printf("%5d     LAST SCORE: %5d     BEST SCORE: %5d",
-		score, last_score, best_score);
 
 	while (1) {
 		food_crush_on = 0;
@@ -384,21 +470,20 @@ void food(void) {
 		food_x = (rand() % (MAP_X - 2)) + 1;    //난수를 좌표값에 넣음 
 		food_y = (rand() % (MAP_Y - 2)) + 1;
 
-		//food가 뱀 몸통과 겹치는지 확인
 		for (i = 0; i<length; i++) {
+			//food가 뱀 몸통과 겹치는지 확인
 			if (food_x == x[i] && food_y == y[i]) {
 				food_crush_on = 1;   //겹치면 food_crush_on 를 on 
 				r++;
 				break;
 			}
+		}
 
-			//food_item이 함정과 겹치는지 확인
-			if (x[i] >= trap_x && x[i] <= trap_x + 4 && y[i] >= trap_y
-				&& y[i] <= trap_y + 3) {
-				food_crush_on = 1;   //겹치면 speed_up_crush_on 를 on 
-				r++;
-				break;
-			}
+		//food_item이 함정과 겹치는지 확인
+		if (food_x >= trap_x && food_x <= trap_x + 4 &&
+			food_y >= trap_y && food_y <= trap_y + 3) {
+			food_crush_on = 1;   //겹치면 speed_up_crush_on 를 on 
+			r++;
 		}
 
 		if (food_crush_on == 1) {
@@ -406,9 +491,7 @@ void food(void) {
 		}
 
 		//안겹쳤을 경우 좌표값에 food를 찍고
-		food_count++;
 		gotoxy(MAP_ADJ_X + food_x, MAP_ADJ_Y + food_y, "♪");
-		speed -= accleration;   //속도 증가 
 		break;
 	}
 }
@@ -423,7 +506,7 @@ void reverse_item(void) {
 	while (1) {
 		reverse_item_crush_on = 0;
 		srand((unsigned)time(NULL) + r);      //난수표생성 
-		reverse_item_x = ((rand() / 2) % (MAP_X - 2)) + 1;    //난수를 좌표값에 넣음 
+		reverse_item_x = ((rand() / 2) % (MAP_X - 2)) + 1;	//난수를 좌표값에 넣음 
 		reverse_item_y = ((rand() / 2) % (MAP_Y - 2)) + 1;
 
 		for (i = 0; i<length; i++) {
@@ -433,21 +516,19 @@ void reverse_item(void) {
 				r++;
 				break;
 			}
+		}
 
-			//reverse_item이 함정과 겹치는지 확인
-			if (x[i] >= trap_x && x[i] <= trap_x + 4 && y[i] >= trap_y
-				&& y[i] <= trap_y + 3) {
-				reverse_item_crush_on = 1;   //겹치면 speed_up_crush_on 를 on 
-				r++;
-				break;
-			}
+		//reverse_item이 함정과 겹치는지 확인
+		if (reverse_item_x >= trap_x && reverse_item_x <= trap_x + 4 &&
+			reverse_item_y >= trap_y && reverse_item_y <= trap_y + 3) {
+			reverse_item_crush_on = 1;   //겹치면 speed_up_crush_on 를 on 
+			r++;
 		}
 
 		if (reverse_item_crush_on == 1) {
 			continue;   //겹쳤을 경우 while문을 다시 시작
 		}
 
-		reverse_item_count++;
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 12);
 		gotoxy(MAP_ADJ_X + reverse_item_x, MAP_ADJ_Y + reverse_item_y, "※");
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
@@ -476,21 +557,19 @@ void length_item(void) {
 				r++;
 				break;
 			}
+		}
 
-			//length_item이 함정과 겹치는지 확인
-			if (x[i] >= trap_x && x[i] <= trap_x + 4 && y[i] >= trap_y
-				&& y[i] <= trap_y + 3) {
-				length_item_crush_on = 1;   //겹치면 speed_up_crush_on 를 on 
-				r++;
-				break;
-			}
+		//length_item이 함정과 겹치는지 확인
+		if (length_item_x >= trap_x && length_item_x <= trap_x + 4 &&
+			length_item_y >= trap_y && length_item_y <= trap_y + 3) {
+			length_item_crush_on = 1;   //겹치면 speed_up_crush_on 를 on 
+			r++;
 		}
 
 		if (length_item_crush_on == 1) {
 			continue;   //겹쳤을 경우 while문을 다시 시작
 		}
 
-		length_item_count++;
 		gotoxy(MAP_ADJ_X + length_item_x, MAP_ADJ_Y + length_item_y, "♣");
 		break;
 	}
@@ -517,20 +596,18 @@ void speed_up_item(void) {
 				r++;
 				break;
 			}
-
-			//speed_up_item이 함정과 겹치는지 확인
-			if (x[i] >= trap_x && x[i] <= trap_x + 3 && y[i] >= trap_y
-				&& y[i] <= trap_y + 2) {
-				speed_up_item_crush_on = 1;   //겹치면 speed_up_crush_on 를 on 
-				r++;
-				break;
-			}
 		}
+
+		//speed_up_item이 함정과 겹치는지 확인
+		if (speed_up_item_x >= trap_x && speed_up_item_x <= trap_x + 3 &&
+			speed_up_item_y >= trap_y && speed_up_item_y <= trap_y + 2) {
+			speed_up_item_crush_on = 1;   //겹치면 speed_up_crush_on 를 on 
+			r++;
+		}
+
 		if (speed_up_item_crush_on == 1) {
 			continue;   //겹쳤을 경우 while문을 다시 시작
 		}
-		speed_up_item_count++;
-		speed += accleration * 3;
 
 		gotoxy(MAP_ADJ_X + speed_up_item_x, MAP_ADJ_Y + speed_up_item_y, "S");
 		break;
@@ -553,7 +630,8 @@ void trap_item(void) {
 
 		//trap_item가 뱀 몸통과 겹치는지 확인
 		for (i = 0; i < length; i++) {
-			if (x[i] >= trap_x && x[i] <= trap_x + 4 && y[i] >= trap_y && y[i] <= trap_y + 3) {
+			if (x[i] >= trap_x && x[i] <= trap_x + 3 && 
+				y[i] >= trap_y && y[i] <= trap_y + 2) {
 				trap_crush_on = 1;   //겹치면 trap_crush_on 를 on 
 				r++;
 				break;
@@ -837,9 +915,9 @@ void option(void) {
 }
 
 
-//각종 스텟을 볼수 있는 함수
+//스테이터스
 void status(void) {
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y, "head= ");
+	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 0, "head= ");
 	printf("%2d,%2d", x[0], y[0]);
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 1, "food= ");
 	printf("%2d,%2d", food_x, food_y);
@@ -851,35 +929,21 @@ void status(void) {
 	printf("%3d", speed);
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 5, "acc= ");
 	printf("%3d", accleration);
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 6, "map_x= ");
-	printf("%3d", MAP_X);
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 7, "map_y= ");
-	printf("%3d", MAP_Y);
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 8, "food_count= ");
-	printf("%3d", food_count);
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 9, "reverse_item_x= ");
-	printf("%3d", reverse_item_x);
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 10, "reverse_item_y= ");
-	printf("%3d", reverse_item_y);
 }
 
 
 //스테이터스 오프
 void status_off(void) {
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y, "                  ");
+	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 0, "                  ");
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 1, "                  ");
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 2, "                  ");
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 3, "                  ");
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 4, "                  ");
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 5, "                  ");
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 6, "                  ");
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 7, "                  ");
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 8, "                  ");
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 9, "                   ");
-	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 10, "                   ");
-	movexy(MAP_ADJ_X + 1, MAP_ADJ_Y + MAP_Y + 2);
 }
 
-void option_text(void) {
+
+//도움말(임시)
+void help(void) {
 
 }
