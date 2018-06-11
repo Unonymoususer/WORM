@@ -10,14 +10,17 @@
 #define DOWN 80
 #define BACK 98
 #define OPTION 111
+#define HELP 104
 #define PAUSE 112
 #define STATUS 115
 #define ESC 27
 #define MAP_ADJ_X 3   //맵의 X축 시작점
 #define MAP_ADJ_Y 2   //맵의 Y축 시작점
 
-static int MAP_X = 30;      //맵의 X축 크기
-static int MAP_Y = 20;		//맵의 Y축 크기
+typedef enum { NOCURSOR, SOLIDCURSOR, NORMALCURSOR } CURSOR_TYPE;
+
+static int MAP_X = 50;      //맵의 X축 크기
+static int MAP_Y = 30;		//맵의 Y축 크기
 static int reverse_value = 0;
 static clock_t reverse_item_effect_start = 0;
 static clock_t reverse_item_effect_end = 0;
@@ -49,6 +52,12 @@ int speed_item_regeneration = 18;		//스피드재생성 18초
 int trap_item_regeneration = 20;		//함정재생성 20초
 int reverse_item_effect_duration = 5;
 
+int food_item_regeneration_switch = 0;
+int reverse_item_regeneration_switch = 0;
+int length_item_regeneration_switch = 0;
+int speed_item_regeneration_switch = 0;
+int trap_item_regeneration_switch = 0;
+
 int food_count = 0;
 int length_item_count = 0;
 int speed_up_item_count = 0;
@@ -62,6 +71,8 @@ int last_score = 0; //마지막 점수 저장, reset함수에 의해 초기화 되지 않음
 int direction;      //이동방향 저장 
 int key;			//입력받은 키 저장 
 int status_on = 0;	//개발자용 status 표시활성화 변수. 게임중에 S키를 누르면 활성화
+int game_over_count = 0;
+static int difficulty = 0;	//난이도 변수. 0: EASY, 1: NORMAL, 2: HARD
 
 
 void gotoxy(int x, int y, char *s);	//커서이동 및 입력
@@ -81,10 +92,14 @@ void status(void);      //개발자용 status 표시
 void status_off(void);   //개발자용 status 끄기
 void option(void);      //option
 void help(void);
+void setCursorType(CURSOR_TYPE c);
 
-						//메인함수
+
+//메인함수
 int main() {
-	system("TITLE WORM GAME");
+	system("mode con cols=150 lines=40");
+	SetConsoleTitleW(L"지렁이 게임");
+	setCursorType(NOCURSOR);
 	title(); //게임 시작화면 출력
 
 	trap_item();		//두더지
@@ -92,19 +107,24 @@ int main() {
 	speed_up_item();	//S		S
 	length_item();		//클로버	♣
 	reverse_item();		//당구장	※
-	food_item_time_start = clock();
-	reverse_item_time_start = clock();
-	length_item_time_start = clock();
-	speed_item_time_start = clock();
-	trap_item_time_start = clock();
+
 
 	while (1) {
 		gotoxy(MAP_ADJ_X, MAP_ADJ_Y + MAP_Y, " YOUR SCORE: ");   //점수표시 
 		printf("%5d     LAST SCORE: %5d     BEST SCORE: %5d",
 			score, last_score, best_score);
 
+		if (game_over_count == 1) {
+			game_over_count = 0;
+			trap_item();		//두더지
+			food();				//음표	♪
+			speed_up_item();	//S		S
+			length_item();		//클로버	♣
+			reverse_item();		//당구장	※
+		}
+
 		if (_kbhit()) {
-			do { 
+			do {
 				key = _getch();
 			} while (key == 224); //키 입력받음
 		}
@@ -122,7 +142,7 @@ int main() {
 				(direction == DOWN && key != UP)) {
 				direction = key;	//180회전이동을 방지하기 위해 필요.
 				if (reverse_value == 1) {
-					switch (key) {
+					switch (direction) {
 					case LEFT:
 						direction = RIGHT;
 						break;
@@ -135,6 +155,12 @@ int main() {
 					case DOWN:
 						direction = UP;
 						break;
+						if ((direction == LEFT && key == RIGHT) ||
+							(direction == RIGHT && key == LEFT) ||
+							(direction == UP && key == DOWN) ||
+							(direction == DOWN && key == UP)) {
+							direction = key;
+						}
 					}
 				}
 			}
@@ -170,24 +196,32 @@ int main() {
 		reverse_item_effect_end = clock();
 
 
-		if ((food_item_time_end - food_item_time_start)/CLOCKS_PER_SEC > 
+		if (food_item_regeneration_switch == 1 &&
+			(food_item_time_end - food_item_time_start) / CLOCKS_PER_SEC >
 			food_item_regeneration) {
 			food();
+			food_item_regeneration_switch = 0;
 			food_item_time_start = clock();
 		}
-		if ((reverse_item_time_end - reverse_item_time_start) / CLOCKS_PER_SEC >
+		if (reverse_item_regeneration_switch == 1 &&
+			(reverse_item_time_end - reverse_item_time_start) / CLOCKS_PER_SEC >
 			reverse_item_regeneration) {
 			reverse_item();
+			reverse_item_regeneration_switch = 0;
 			reverse_item_time_start = clock();
 		}
-		if ((length_item_time_end - length_item_time_start) / CLOCKS_PER_SEC >
+		if (length_item_regeneration_switch == 1 &&
+			(length_item_time_end - length_item_time_start) / CLOCKS_PER_SEC >
 			length_item_regeneration) {
 			length_item();
+			length_item_regeneration_switch = 0;
 			length_item_time_start = clock();
 		}
-		if ((speed_item_time_end - speed_item_time_start) / CLOCKS_PER_SEC >
+		if (speed_item_regeneration_switch == 1 &&
+			(speed_item_time_end - speed_item_time_start) / CLOCKS_PER_SEC >
 			speed_item_regeneration) {
 			speed_up_item();
+			speed_item_regeneration_switch = 0;
 			speed_item_time_start = clock();
 		}
 		if ((reverse_item_effect_end - reverse_item_effect_start) / CLOCKS_PER_SEC >
@@ -244,13 +278,20 @@ void title(void) {
 	gotoxy(MAP_ADJ_X + (MAP_X / 2) - 7, MAP_ADJ_Y + (MAP_Y / 2) + 3,
 		"   ◇ O : Option");
 	gotoxy(MAP_ADJ_X + (MAP_X / 2) - 7, MAP_ADJ_Y + (MAP_Y / 2) + 4,
+		"   ◇ H : Help");
+	gotoxy(MAP_ADJ_X + (MAP_X / 2) - 7, MAP_ADJ_Y + (MAP_Y / 2) + 5,
 		"   ◇ ESC : Quit");
 
 	while (1) {
 		//키입력받음
 		if (_kbhit()) {
 			key = _getch();
-			if (key == OPTION) option();
+			if (key == OPTION) {
+				option();
+			}
+			if (key == HELP) {
+				help();
+			}
 			if (key == ESC) exit(0);
 			else break;   //아니면 그냥 계속 진행
 		}
@@ -277,7 +318,7 @@ void reset(void) {
 	length = 5;            //뱀 길이 초기화
 	score = 0;            //점수 초기화
 
-	//뱀 몸통값 입력 
+						  //뱀 몸통값 입력 
 	for (i = 0; i<length; i++) {
 		x[i] = MAP_X / 2 + i;
 		y[i] = MAP_Y / 2;
@@ -286,6 +327,20 @@ void reset(void) {
 	gotoxy(MAP_ADJ_X + x[0], MAP_ADJ_Y + y[0], "★");   //뱀 머리 그림
 
 	trap_item();			//두더지
+
+	reverse_item_effect_start = 0;
+	reverse_item_effect_end = 0;
+	food_item_time_start = 0;
+	reverse_item_time_start = 0;
+	length_item_time_start = 0;
+	speed_item_time_start = 0;
+	trap_item_time_start = 0;
+
+	food_item_time_end = 0;
+	reverse_item_time_end = 0;
+	length_item_time_end = 0;
+	speed_item_time_end = 0;
+	trap_item_time_end = 0;
 }
 
 
@@ -316,12 +371,19 @@ void move(int direction) {
 
 		x[length - 1] = x[length - 2];   //새로만든 몸통에 값 입력
 		y[length - 1] = y[length - 2];
+		food_item_time_start = clock();
+		food_item_regeneration_switch = 1;
+
 	}
 
 	//speed_up_item과 충돌했을 경우
 	else if (x[0] == speed_up_item_x && y[0] == speed_up_item_y) {
 		speed_up_item_count++;
 		speed += accleration * 3;
+
+		speed_item_time_start = clock();
+		speed_item_regeneration_switch = 1;
+
 	}
 
 	//reverse_item과 충돌했을 경우
@@ -333,6 +395,7 @@ void move(int direction) {
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
 		reverse_value = 1;
 		reverse_item_effect_start = clock();
+		reverse_item_regeneration_switch = 1;
 	}
 
 	//length_item과 충돌했을 경우
@@ -346,10 +409,14 @@ void move(int direction) {
 		else {
 			gotoxy(MAP_ADJ_X + x[length], MAP_ADJ_Y + y[length], "  ");
 		}
+
+		length_item_time_start = clock();
+		length_item_regeneration_switch = 1;
+
 	}
 
 	//trap과 충돌했을 경우
-	else if (x[0] >= trap_x && x[0] <= trap_x + 3 && 
+	else if (x[0] >= trap_x && x[0] <= trap_x + 3 &&
 		y[0] >= trap_y && y[0] <= trap_y + 2) {
 		game_over();
 		return;
@@ -395,7 +462,7 @@ void move(int direction) {
 		if (direction == UP) --y[0];
 		if (direction == DOWN) ++y[0];
 		gotoxy(MAP_ADJ_X + x[i], MAP_ADJ_Y + y[i], "★"); //새로운 머리좌표값에 머리를 그림 
-		//SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
+														 //SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
 	}
 }
 
@@ -455,6 +522,7 @@ void game_over(void) {
 	while (_kbhit()) _getch();
 	key = _getch();
 	title();
+	game_over_count = 1;
 }
 
 
@@ -630,7 +698,7 @@ void trap_item(void) {
 
 		//trap_item가 뱀 몸통과 겹치는지 확인
 		for (i = 0; i < length; i++) {
-			if (x[i] >= trap_x && x[i] <= trap_x + 3 && 
+			if (x[i] >= trap_x && x[i] <= trap_x + 3 &&
 				y[i] >= trap_y && y[i] <= trap_y + 2) {
 				trap_crush_on = 1;   //겹치면 trap_crush_on 를 on 
 				r++;
@@ -642,7 +710,7 @@ void trap_item(void) {
 			continue;   //겹쳤을 경우 while문을 다시 시작
 		}
 
-		gotoxy(MAP_ADJ_X + trap_x, MAP_ADJ_Y + trap_y, " とㅡつ ");
+		gotoxy(MAP_ADJ_X + trap_x, MAP_ADJ_Y + trap_y + 0, " とㅡつ ");
 		gotoxy(MAP_ADJ_X + trap_x, MAP_ADJ_Y + trap_y + 1, "ㅣ⊙⊙ㅣ");
 		gotoxy(MAP_ADJ_X + trap_x, MAP_ADJ_Y + trap_y + 2, "ㅡㅡㅡㅡ");
 		break;
@@ -662,23 +730,25 @@ void option(void) {
 	for (i = MAP_ADJ_X + 1; i<MAP_ADJ_X + MAP_X; i++) {
 		for (j = MAP_ADJ_Y + 1; j<MAP_ADJ_Y + MAP_Y - 1; j++) gotoxy(i, j, "  ");
 	}
-	gotoxy(MAP_ADJ_X + 5, MAP_ADJ_Y,
+	gotoxy(MAP_ADJ_X + MAP_X / 2 - 10, MAP_ADJ_Y,
 		" < PRESS B KEY TO GO BACK TO THE TITLE > ");
-	gotoxy(MAP_ADJ_X + 8, MAP_ADJ_Y + 3,
+	gotoxy(MAP_ADJ_X + MAP_X / 2 - 7, MAP_ADJ_Y + 3,
 		"+--------------------------+");
-	gotoxy(MAP_ADJ_X + 8, MAP_ADJ_Y + 4,
+	gotoxy(MAP_ADJ_X + MAP_X / 2 - 7, MAP_ADJ_Y + 4,
 		"|        O P T I O N       |");
-	gotoxy(MAP_ADJ_X + 8, MAP_ADJ_Y + 5,
+	gotoxy(MAP_ADJ_X + MAP_X / 2 - 7, MAP_ADJ_Y + 5,
 		"+--------------------------+");
 
 	movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 8);
-	printf("SIZE OF MAP_X:   < %3d >", MAP_X);
+	printf("SIZE OF MAP_X:   <   %3d  >", MAP_X);
 	movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 11);
-	printf("SIZE OF MAP_Y:   < %3d >", MAP_Y);
+	printf("SIZE OF MAP_Y:   <   %3d  >", MAP_Y);
 	movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 14);
-	printf("INITIAL SPEED:   < %3d >", speed);
+	printf("INITIAL SPEED:   <   %3d  >", speed);
 	movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 17);
-	printf("ACCLERATION:     < %3d >", accleration);
+	printf("ACCLERATION:     <   %3d  >", accleration);
+	movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+	printf("DIFFICULTY:      <  EASY  >");
 
 	while (1) {
 		if (_kbhit()) {
@@ -690,6 +760,7 @@ void option(void) {
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 11, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 14, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 17, " ");
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 20, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 8, "→");
 			Sleep(50);
 
@@ -699,13 +770,13 @@ void option(void) {
 					key = 0;
 					MAP_X = 30;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 8);
-					printf("SIZE OF MAP_X:   < %3d >", MAP_X);
+					printf("SIZE OF MAP_X:   <   %3d  >", MAP_X);
 				}
 				else if (30 < MAP_X) {
 					key = 0;
 					MAP_X -= 10;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 8);
-					printf("SIZE OF MAP_X:   < %3d >", MAP_X);
+					printf("SIZE OF MAP_X:   <   %3d  >", MAP_X);
 				}
 				break;
 
@@ -714,13 +785,13 @@ void option(void) {
 					key = 0;
 					MAP_X += 10;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 8);
-					printf("SIZE OF MAP_X:   < %3d >", MAP_X);
+					printf("SIZE OF MAP_X:   <   %3d  >", MAP_X);
 				}
 				else if (MAP_X >= 200) {
 					key = 0;
 					MAP_X = 200;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 8);
-					printf("SIZE OF MAP_X:   < %3d >", MAP_X);
+					printf("SIZE OF MAP_X:   <   %3d  >", MAP_X);
 				}
 				break;
 
@@ -739,23 +810,23 @@ void option(void) {
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 11, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 14, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 17, " ");
-
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 20, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 11, "→");
 			Sleep(50);
 
 			switch (key) {
 			case LEFT:
-				if (MAP_Y <= 20) {
+				if (MAP_Y <= 30) {
 					key = 0;
-					MAP_Y = 20;
+					MAP_Y = 30;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 11);
-					printf("SIZE OF MAP_Y:   < %3d >", MAP_Y);
+					printf("SIZE OF MAP_Y:   <   %3d  >", MAP_Y);
 				}
-				else if (20 < MAP_Y) {
+				else if (30 < MAP_Y) {
 					key = 0;
 					MAP_Y -= 10;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 11);
-					printf("SIZE OF MAP_Y:   < %3d >", MAP_Y);
+					printf("SIZE OF MAP_Y:   <   %3d  >", MAP_Y);
 				}
 				break;
 
@@ -765,13 +836,13 @@ void option(void) {
 					key = 0;
 					MAP_Y += 10;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 11);
-					printf("SIZE OF MAP_Y:   < %3d >", MAP_Y);
+					printf("SIZE OF MAP_Y:   <   %3d  >", MAP_Y);
 				}
 				else if (MAP_Y >= 200) {
 					key = 0;
 					MAP_Y = 200;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 11);
-					printf("SIZE OF MAP_Y:   < %3d >", MAP_Y);
+					printf("SIZE OF MAP_Y:   <   %3d  >", MAP_Y);
 				}
 				break;
 
@@ -795,7 +866,7 @@ void option(void) {
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 11, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 14, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 17, " ");
-
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 20, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 14, "→");
 			Sleep(50);
 
@@ -805,13 +876,13 @@ void option(void) {
 					key = 0;
 					speed = 30;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 14);
-					printf("INITIAL SPEED:   < %3d >", speed);
+					printf("INITIAL SPEED:   <   %3d  >", speed);
 				}
 				else if (30 < speed) {
 					key = 0;
 					speed -= 10;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 14);
-					printf("INITIAL SPEED:   < %3d >", speed);
+					printf("INITIAL SPEED:   <   %3d  >", speed);
 				}
 				break;
 
@@ -820,13 +891,13 @@ void option(void) {
 					key = 0;
 					speed += 10;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 14);
-					printf("INITIAL SPEED:   < %3d >", speed);
+					printf("INITIAL SPEED:   <   %3d  >", speed);
 				}
 				else if (speed >= 150) {
 					key = 0;
 					speed = 150;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 14);
-					printf("INITIAL SPEED:   < %3d >", speed);
+					printf("INITIAL SPEED:   <   %3d  >", speed);
 				}
 				break;
 
@@ -850,6 +921,7 @@ void option(void) {
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 11, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 14, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 17, " ");
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 20, " ");
 			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 17, "→");
 			Sleep(50);
 
@@ -859,13 +931,13 @@ void option(void) {
 					key = 0;
 					accleration = 1;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 17);
-					printf("ACCLERATION:      < %3d >", accleration);
+					printf("ACCLERATION:     <   %3d  >", accleration);
 				}
 				else if (1 < accleration) {
 					key = 0;
 					accleration -= 1;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 17);
-					printf("ACCLERATION:      < %3d >", accleration);
+					printf("ACCLERATION:     <   %3d  >", accleration);
 				}
 				break;
 
@@ -874,13 +946,13 @@ void option(void) {
 					key = 0;
 					accleration += 1;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 17);
-					printf("ACCLERATION:      < %3d >", accleration);
+					printf("ACCLERATION:     <   %3d  >", accleration);
 				}
 				else if (accleration >= 5) {
 					key = 0;
 					accleration = 5;
 					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 17);
-					printf("ACCLERATION:      < %3d >", accleration);
+					printf("ACCLERATION:     <   %3d  >", accleration);
 				}
 				break;
 
@@ -890,7 +962,86 @@ void option(void) {
 				break;
 
 			case DOWN:
+				direction_stack_vertical = 4;
+				key = 0;
+				break;
+
+			default:
+				break;
+			}
+		}
+
+		else if (direction_stack_vertical == 4) {
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 8, " ");
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 11, " ");
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 14, " ");
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 17, " ");
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 20, " ");
+			gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 20, "→");
+			Sleep(50);
+
+			switch (key) {
+			case LEFT:
+				if (difficulty == 0) {
+					key = 0;
+					difficulty = 0;
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("                           ");
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("DIFFICULTY:      <  EASY  >");
+				}
+				else if (difficulty == 1) {
+					key = 0;
+					difficulty = 0;
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("                           ");
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("DIFFICULTY:      <  EASY  >");
+				}
+				else if (difficulty == 2) {
+					key = 0;
+					difficulty = 1;
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("                           ");
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("DIFFICULTY:      < NORMAL >");
+				}
+				break;
+
+			case RIGHT:
+				if (difficulty == 0) {
+					key = 0;
+					difficulty = 1;
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("                           ");
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("DIFFICULTY:      < NORMAL >");
+				}
+				else if (difficulty == 1) {
+					key = 0;
+					difficulty = 2;
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("                           ");
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("DIFFICULTY:      <  HARD  >");
+				}
+				else if (difficulty == 2) {
+					key = 0;
+					difficulty = 2;
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("                           ");
+					movexy(MAP_ADJ_X + 6, MAP_ADJ_Y + 20);
+					printf("DIFFICULTY:      <  HARD  >");
+				}
+				break;
+
+			case UP:
 				direction_stack_vertical = 3;
+				key = 0;
+				break;
+
+			case DOWN:
+				direction_stack_vertical = 4;
 				key = 0;
 				break;
 
@@ -929,6 +1080,8 @@ void status(void) {
 	printf("%3d", speed);
 	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 5, "acc= ");
 	printf("%3d", accleration);
+	gotoxy(MAP_ADJ_X + MAP_X + 1, MAP_ADJ_Y + 6, "switch= ");
+	printf("%3d", food_item_regeneration_switch);
 }
 
 
@@ -943,7 +1096,74 @@ void status_off(void) {
 }
 
 
-//도움말(임시)
-void help(void) {
+//커서 안보이게 해주는 함수
+void setCursorType(CURSOR_TYPE c)
+{
+	CONSOLE_CURSOR_INFO CurInfo;
+	switch (c) {
+	case NOCURSOR:
+		CurInfo.dwSize = 1;
+		CurInfo.bVisible = FALSE;
+		break;
+	case SOLIDCURSOR:
+		CurInfo.dwSize = 100;
+		CurInfo.bVisible = TRUE;
+		break;
+	case NORMALCURSOR:
+		CurInfo.dwSize = 20;
+		CurInfo.bVisible = TRUE;
+		break;
+	}
+	SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &CurInfo);
+}
 
+
+//도움말
+void help(void) {
+	int i, j;
+
+	for (i = MAP_ADJ_X + 1; i<MAP_ADJ_X + MAP_X; i++) {
+		for (j = MAP_ADJ_Y + 1; j<MAP_ADJ_Y + MAP_Y - 1; j++) gotoxy(i, j, "  ");
+	}
+	gotoxy(MAP_ADJ_X + MAP_X / 2 - 10, MAP_ADJ_Y,
+		" < PRESS B KEY TO GO BACK TO THE TITLE > ");
+	gotoxy(MAP_ADJ_X + MAP_X / 2 - 7, MAP_ADJ_Y + 3,
+		"+--------------------------+");
+	gotoxy(MAP_ADJ_X + MAP_X / 2 - 7, MAP_ADJ_Y + 4,
+		"|        H  E  L  P        |");
+	gotoxy(MAP_ADJ_X + MAP_X / 2 - 7, MAP_ADJ_Y + 5,
+		"+--------------------------+");
+	gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 8,
+		"♪ : 점수를 올려주는 아이템");
+	gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 9,
+		"	   획득할 때마다 지렁이의 길이가 늘어난다");
+	gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 10,
+		"Ｓ : 지렁이의 속도를 느리게 만드는 아이템");
+	gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 11,
+		"♣ : 지렁이의 길이를 줄여주는 아이템");
+	gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 12,
+		"※ : 키보드입력을 일정 시간동안 반전시킨다");
+	gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 14,
+		" とㅡつ    ");
+	gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 15,
+		"ㅣ⊙⊙ㅣ   플레이 도중 나타나는 함정");
+	gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 16,
+		"ㅡㅡㅡㅡ   지렁이와 닿을 경우 게임이 끝난다");
+	gotoxy(MAP_ADJ_X + 4, MAP_ADJ_Y + 17,
+		" 두더지 ");
+
+	while (1) {
+		if (_kbhit()) {
+			key = _getch();
+			if (key == BACK) {
+				break;
+			}
+			if (key == ESC) {
+				gotoxy(MAP_ADJ_X, MAP_ADJ_Y + MAP_Y + 1, " ");
+				exit(0);
+			}
+			else continue;
+		}
+	}
+	title();
 }
